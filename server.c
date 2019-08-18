@@ -3,7 +3,8 @@
 #include <sys/types.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
-#include<netinet/in.h>
+#include <netinet/in.h>
+#include <string.h>
 
 #define PORT     2115
 #define MSG_SIZE 1000
@@ -23,6 +24,7 @@ int main()
   struct sockaddr_in clientDatabase[255];
   socklen_t len;
   unsigned char lastClient = 0;
+  unsigned char firstTime = 1;
 
   // Create a UDP Socket
   udp.socketDescriptor = socket(AF_INET, SOCK_DGRAM, 0);
@@ -49,17 +51,32 @@ int main()
     buffer[n] = '\0';
     puts(buffer);
 
-/*    for(unsigned char clientNumber = 0; clientNumber < lastClient; clientNumber++)
+    if (firstTime == 1)
     {
-      if (udp.clientAddress.sin_addr.s_addr != clientDatabase[clientNumber].sin_addr.s_addr)
+       clientDatabase[lastClient] = udp.clientAddress;
+       lastClient++;
+       printf("Zero client added, address: %d\t port: %d \n", clientDatabase[lastClient].sin_addr.s_addr, clientDatabase[lastClient].sin_port);
+       firstTime = 0;
+    }
+    else
+    {
+      for(unsigned char clientNumber = 0; clientNumber < lastClient; clientNumber++)
       {
-         clientDatabase[lastClient++] = udp.clientAddress;
+        if (udp.clientAddress.sin_addr.s_addr != clientDatabase[clientNumber].sin_addr.s_addr &&
+            udp.clientAddress.sin_port != clientDatabase[clientNumber].sin_port)
+        {
+
+           clientDatabase[lastClient] = udp.clientAddress;
+           lastClient++;
+           printf("%d client added, address: %d\t port: %d \n", lastClient,
+                 clientDatabase[lastClient].sin_addr.s_addr,
+                 clientDatabase[lastClient].sin_port);
+           break;
+        }
       }
     }
-*/
-    clientDatabase[lastClient++] = udp.clientAddress;
 
-    // send the response
+    // send received message to all known clients
     for (unsigned char clientNumber = 0; clientNumber < lastClient; clientNumber++)
     {
       sendto(udp.socketDescriptor,
@@ -67,7 +84,7 @@ int main()
              MSG_SIZE,
              0,
              (struct sockaddr*)&(clientDatabase[clientNumber]),
-             sizeof(clientDatabase[clientNumber]));
+             sizeof(struct sockaddr_in));
     }
   }
 }
