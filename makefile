@@ -1,16 +1,11 @@
-testServer: server
+testServer: build
 	pytest
 
-runServer: server
-	./server & echo $$! > /tmp/server.pid
+runServer: build
+	./chat 2115 & echo $$! > /tmp/chat.pid
 
 stopServer:
-	kill `cat /tmp/server.pid` && rm "/tmp/server.pid"
+	kill `cat /tmp/chat.pid` && rm "/tmp/chat.pid"
 
-server: server.c
-	gcc server.c -O0 -Wall -o server
-
-client: client.c
-	gcc client.c -O0 -Wall -pthread -o client
-
-all: server client
+build: client.c server.c chat.c
+	gcc -pthread client.c server.c chat.c -O0 -Wall -o chat -I.

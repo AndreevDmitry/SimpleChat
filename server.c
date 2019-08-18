@@ -6,7 +6,6 @@
 #include <netinet/in.h>
 #include <string.h>
 
-#define PORT     2115
 #define MSG_SIZE 1000
 
 typedef struct
@@ -17,7 +16,7 @@ typedef struct
 }
 tUdp;
 
-int main()
+int server(unsigned short port)
 {
   tUdp udp = {};
   char buffer[MSG_SIZE];
@@ -29,7 +28,7 @@ int main()
   // Create a UDP Socket
   udp.socketDescriptor = socket(AF_INET, SOCK_DGRAM, 0);
   udp.serverAddress.sin_addr.s_addr = htonl(INADDR_ANY);
-  udp.serverAddress.sin_port = htons(PORT);
+  udp.serverAddress.sin_port = htons(port);
   udp.serverAddress.sin_family = AF_INET;
 
   // bind server address to socket descriptor
