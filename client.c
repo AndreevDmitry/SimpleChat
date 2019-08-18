@@ -7,6 +7,9 @@
 #include <arpa/inet.h>
 #include <pthread.h>
 
+#define PORT     2115
+#define MSG_SIZE 1000
+
 typedef struct
 {
   int socketDescriptor;
@@ -14,8 +17,6 @@ typedef struct
 }
 tUdp;
 
-#define PORT     55555
-#define MSG_SIZE 1000
 
 void udpInit(tUdp *pUdp);
 void sendMsgActivity(tUdp *pUdp);
@@ -24,24 +25,22 @@ void recvMsgThread(void *pUdp); /* Thread function */
 int main()
 {
   tUdp udp = {};
-
   pthread_t tid;
   pthread_attr_t attr;
 
   udpInit(&udp);
 
-  /* Get default attributes */
+  /*Receiver and sender should be runned in separated threads, because reading
+    from stdin can block thread indefinitely and messages will not be received
+    in time*/
   pthread_attr_init(&attr);
-  /* Create new thread*/
   pthread_create(&tid,&attr,(void *)recvMsgThread, &udp);
 
   sendMsgActivity(&udp);
 
-  /* Wait for end of thread execution */
   pthread_join(tid,NULL);
 
   close(udp.socketDescriptor);
-
   return 0;
 }
 
@@ -59,7 +58,7 @@ void udpInit(tUdp *pUdp)
   // Filling server information
   pUdp->serverAddress.sin_family = AF_INET;
   pUdp->serverAddress.sin_port = htons(PORT);
-  pUdp->serverAddress.sin_addr.s_addr = inet_addr("178.205.142.89");
+  pUdp->serverAddress.sin_addr.s_addr = inet_addr("127.0.0.1");
 
   // connect to server
   connectionStatus = connect(pUdp->socketDescriptor,
