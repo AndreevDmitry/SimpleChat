@@ -1,0 +1,3 @@
+{
+  "tests/server_test.py::test_send_receive": true
+}
