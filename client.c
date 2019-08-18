@@ -14,7 +14,7 @@ typedef struct
 }
 tUdp;
 
-#define PORT     2115
+#define PORT     55555
 #define MSG_SIZE 1000
 
 void udpInit(tUdp *pUdp);
@@ -36,11 +36,12 @@ int main()
   pthread_create(&tid,&attr,(void *)recvMsgThread, &udp);
 
   sendMsgActivity(&udp);
-  pthread_exit(0);
+
   /* Wait for end of thread execution */
   pthread_join(tid,NULL);
 
   close(udp.socketDescriptor);
+
   return 0;
 }
 
@@ -58,7 +59,7 @@ void udpInit(tUdp *pUdp)
   // Filling server information
   pUdp->serverAddress.sin_family = AF_INET;
   pUdp->serverAddress.sin_port = htons(PORT);
-  pUdp->serverAddress.sin_addr.s_addr = inet_addr("127.0.0.1");
+  pUdp->serverAddress.sin_addr.s_addr = inet_addr("178.205.142.89");
 
   // connect to server
   connectionStatus = connect(pUdp->socketDescriptor,
@@ -73,19 +74,28 @@ void udpInit(tUdp *pUdp)
 
 void recvMsgThread(void *pUdp)
 {
-  char buffer[MSG_SIZE];
+  char serverMsg[MSG_SIZE];
 
   do
   {
     recvfrom(((tUdp*)pUdp)->socketDescriptor,
-             buffer,
-             sizeof(buffer),
+             serverMsg,
+             sizeof(serverMsg),
              0,
              (struct sockaddr*)NULL,
              NULL);
-    puts(buffer);
+
+    if (strcmp(serverMsg, "/exit\n") == 0)
+    {
+      pthread_exit(0);
+      break;
+    }
+    else
+    {
+      puts(serverMsg);
+    }
   }
-  while(strcmp(buffer, "/exit\n") != 0);
+  while(1);
 }
 
 void sendMsgActivity(tUdp *pUdp)
@@ -101,11 +111,6 @@ void sendMsgActivity(tUdp *pUdp)
       break;
     }
 
-    if(strcmp(clientMsg, "/exit\n") == 0)
-    {
-      break;
-    }
-
     sendtoStatus = send(pUdp->socketDescriptor,
                           &clientMsg,
                           strlen(clientMsg),
@@ -114,6 +119,11 @@ void sendMsgActivity(tUdp *pUdp)
     {
       perror("sendto failed");
       break;
+    }
+
+    if(strcmp(clientMsg, "/exit\n") == 0)
+    {
+       break;
     }
   }
   while(1);
