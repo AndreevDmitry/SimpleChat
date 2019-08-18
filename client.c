@@ -17,7 +17,6 @@ typedef struct
 }
 tUdp;
 
-
 void udpInit(tUdp *pUdp);
 void sendMsgActivity(tUdp *pUdp);
 void recvMsgThread(void *pUdp); /* Thread function */
@@ -77,12 +76,10 @@ void recvMsgThread(void *pUdp)
 
   do
   {
-    recvfrom(((tUdp*)pUdp)->socketDescriptor,
+    recv(((tUdp*)pUdp)->socketDescriptor,
              serverMsg,
              sizeof(serverMsg),
-             0,
-             (struct sockaddr*)NULL,
-             NULL);
+             0);
 
     if (strcmp(serverMsg, "/exit\n") == 0)
     {
