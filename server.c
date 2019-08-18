@@ -23,8 +23,8 @@ int main()
   char buffer[MSG_SIZE];
   struct sockaddr_in clientDatabase[255];
   socklen_t len;
-  unsigned char lastClient = 0;
-  unsigned char firstTime = 1;
+  unsigned char lastClientIndex = 0;
+  unsigned char clientExists = 0;
 
   // Create a UDP Socket
   udp.socketDescriptor = socket(AF_INET, SOCK_DGRAM, 0);
@@ -41,6 +41,7 @@ int main()
   len = sizeof(udp.clientAddress);
   while(1)
   {
+    clientExists = 0;
     int n = recvfrom(udp.socketDescriptor,
                      buffer,
                      sizeof(buffer),
@@ -51,33 +52,24 @@ int main()
     buffer[n] = '\0';
     puts(buffer);
 
-    if (firstTime == 1)
+    for(unsigned char clientNumber = 0; clientNumber < lastClientIndex; clientNumber++)
     {
-       clientDatabase[lastClient] = udp.clientAddress;
-       lastClient++;
-       printf("Zero client added, address: %d\t port: %d \n", clientDatabase[lastClient].sin_addr.s_addr, clientDatabase[lastClient].sin_port);
-       firstTime = 0;
-    }
-    else
-    {
-      for(unsigned char clientNumber = 0; clientNumber < lastClient; clientNumber++)
-      {
-        if (udp.clientAddress.sin_addr.s_addr != clientDatabase[clientNumber].sin_addr.s_addr &&
-            udp.clientAddress.sin_port != clientDatabase[clientNumber].sin_port)
+       if (udp.clientAddress.sin_addr.s_addr == clientDatabase[clientNumber].sin_addr.s_addr &&
+           udp.clientAddress.sin_port == clientDatabase[clientNumber].sin_port)
         {
-
-           clientDatabase[lastClient] = udp.clientAddress;
-           lastClient++;
-           printf("%d client added, address: %d\t port: %d \n", lastClient,
-                 clientDatabase[lastClient].sin_addr.s_addr,
-                 clientDatabase[lastClient].sin_port);
-           break;
+          clientExists = 1;
+          break;
         }
-      }
     }
+    if (clientExists == 0)
+    {
+      clientDatabase[lastClientIndex] = udp.clientAddress;
+      lastClientIndex++;
+    }
+
 
     // send received message to all known clients
-    for (unsigned char clientNumber = 0; clientNumber < lastClient; clientNumber++)
+    for (unsigned char clientNumber = 0; clientNumber < lastClientIndex; clientNumber++)
     {
       sendto(udp.socketDescriptor,
              &buffer,
