@@ -1,3 +1,13 @@
+import socket
+
+HOST = "localhost"
+PORT = 2115
+
+def connect():
+    sock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+    sock.connect((HOST, PORT))
+    return sock
+
 def test_send_receive():
     message = b'echo!'
     sock = connect()
