@@ -66,9 +66,9 @@ void udpInit(tUdp *pUdp)
                              sizeof((pUdp->serverAddress)));
   if(connectionStatus < 0)
   {
- 		perror("\n Error : Connect Failed \n");
- 		exit(EXIT_FAILURE);
- 	}
+     perror("\n Error : Connect Failed \n");
+     exit(EXIT_FAILURE);
+   }
 }
 
 void recvMsgThread(void *pUdp)
