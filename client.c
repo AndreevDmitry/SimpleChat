@@ -8,7 +8,8 @@
 #include <pthread.h>
 
 #define MSG_SIZE 1000
-
+#define ACTIVE_CLIENT 1
+#define CLOSE_CLIENT  0
 typedef struct
 {
   int socketDescriptor;
@@ -16,7 +17,7 @@ typedef struct
 }
 tUdp;
 
-char closeClient = 0;
+char clientStatus = ACTIVE_CLIENT;
 
 void udpClientInit(tUdp *pUdp, unsigned long serverIp, unsigned short serverPort);
 void sendMsgActivity(tUdp *pUdp);
@@ -78,7 +79,7 @@ void *recvMsgThread(void *pUdp)
              0);
     puts(serverMsg);
   }
-  while (closeClient == 0);
+  while (clientStatus == ACTIVE_CLIENT);
   pthread_exit(NULL);
 }
 
@@ -107,8 +108,8 @@ void sendMsgActivity(tUdp *pUdp)
     if(strcmp(clientMsg, "/closeClient\n") == 0)
     {
       close(pUdp->socketDescriptor);
-      closeClient=1;
+      clientStatus = CLOSE_CLIENT;
     }
   }
-  while(closeClient == 0);
+  while(clientStatus == ACTIVE_CLIENT);
 }
