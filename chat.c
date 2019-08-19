@@ -22,7 +22,7 @@ int main(int argc, char *argv[])
   {
     serverPort = atoi(argv[1]);
     printf("Start server on port %d\n", serverPort);
-    printf("Use /closeServer or Ctrl+D for shutdown the server\n");
+    printf("Use Ctrl+C for shutdown the server\n");
     server((unsigned short)serverPort);
   }
   else if (argc == 3)

@@ -7,11 +7,9 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <string.h>
-#include <pthread.h>
 
 #define MSG_SIZE 1000
-#define SERVER_ONLINE 1
-#define SERVER_0FFLINE 0
+#define UNKNOWN_CLIENT (char)(-1)
 
 typedef struct
 {
@@ -21,13 +19,11 @@ typedef struct
 }
 tUdp;
 
-static unsigned char serverControl = SERVER_ONLINE;
 static struct sockaddr_in clientDatabase[255];
 static unsigned char nextClientIndex = 0;
 
 void udpServerInit(tUdp *pUdp, unsigned short port);
 void recvSendMsgActivity(tUdp *pUdp);
-void *waitExitThread(void *pUdp);
 void sendToAll(tUdp *pUdp, char * buffer);
 char clientSearch(tUdp *pUdp);
 void clientHandler(tUdp *pUdp, char currentClient, char *buffer);
@@ -35,18 +31,9 @@ void clientHandler(tUdp *pUdp, char currentClient, char *buffer);
 int server(unsigned short port)
 {
   tUdp udp = {};
-  pthread_t tid;
-  pthread_attr_t attr;
 
   udpServerInit(&udp, port);
-
-  pthread_attr_init(&attr);
-  pthread_create(&tid,&attr,(void *)waitExitThread, &udp);
-
   recvSendMsgActivity(&udp);
-
-  pthread_join(tid,NULL);
-
   return EXIT_SUCCESS;
 }
 
@@ -81,7 +68,7 @@ void recvSendMsgActivity(tUdp *pUdp)
   socklen_t socketLengh = sizeof(struct sockaddr_in);
   char currentClient;
 
-  while(serverControl)
+  while(1)
   {
     int n = recvfrom(pUdp->socketDescriptor,
                      buffer,
@@ -92,42 +79,11 @@ void recvSendMsgActivity(tUdp *pUdp)
 
     buffer[n] = '\0';
     puts(buffer);
+
     currentClient = clientSearch(pUdp);
-
-    if (currentClient == -1)
-    {
-      /*Respond with same to sender at first*/
-      sendto(pUdp->socketDescriptor,
-             buffer,
-             MSG_SIZE,
-             0,
-             (struct sockaddr*)&(pUdp->clientAddress),
-             sizeof(struct sockaddr_in));
-     }
-
-     clientHandler(pUdp, currentClient, buffer);
-     sendToAll(pUdp, buffer);
+    clientHandler(pUdp, currentClient, buffer);
+    sendToAll(pUdp, buffer);
   }
-}
-
-void *waitExitThread(void *pUdp)
-{
-  char* fgetsStatus;
-  char controlMsg[MSG_SIZE];
-  do
-  {
-    fgetsStatus = fgets(controlMsg, sizeof(controlMsg), stdin);
-    if ((fgetsStatus == NULL) || (strcmp(controlMsg, "/closeServer\n") == 0))
-    {
-       serverControl = SERVER_0FFLINE;
-       strcpy(controlMsg, "Server goes to offline...\n");
-       puts(controlMsg);
-       sendToAll(((tUdp*)pUdp), controlMsg);
-       close(((tUdp*)pUdp)->socketDescriptor);
-       exit(EXIT_SUCCESS);
-    }
-  }
-  while(1);
 }
 
 void sendToAll(tUdp *pUdp, char *buffer)
@@ -146,7 +102,7 @@ void sendToAll(tUdp *pUdp, char *buffer)
 
 char clientSearch(tUdp *pUdp)
 {
-  char clientPosition = -1;
+  char clientPosition = UNKNOWN_CLIENT;
 
   for(unsigned char clientNumber = 0; clientNumber < nextClientIndex; clientNumber++)
   {
@@ -161,7 +117,21 @@ char clientSearch(tUdp *pUdp)
 
 void clientHandler(tUdp *pUdp, char currentClient, char *buffer)
 {
-  if ((currentClient == -1) && !(strcmp(buffer, "/closeClient\n") == 0))
+  /*Respond with same message for current client and all known clients*/
+  if (currentClient == UNKNOWN_CLIENT)
+  {
+
+     sendto(pUdp->socketDescriptor,
+           buffer,
+           MSG_SIZE,
+           0,
+           (struct sockaddr*)&(pUdp->clientAddress),
+           sizeof(struct sockaddr_in));
+     sendToAll(pUdp, buffer);
+   }
+
+  /*Add new client to the end of clientDatabase*/
+  if ((currentClient == UNKNOWN_CLIENT) && !(strcmp(buffer, "/closeClient\n") == 0))
   {
     sprintf(buffer,
            "Client with IP: %d, port: %d connected to the chat\n",
@@ -171,7 +141,8 @@ void clientHandler(tUdp *pUdp, char currentClient, char *buffer)
     clientDatabase[nextClientIndex] = pUdp->clientAddress;
     nextClientIndex++;
   }
-  else if ((currentClient > -1) && (strcmp(buffer, "/closeClient\n") == 0))
+  /*Remove client from clientDatabase when it leave chat*/
+  else if ((currentClient > UNKNOWN_CLIENT) && (strcmp(buffer, "/closeClient\n") == 0))
   {
     sprintf(buffer,
            "Client with IP: %d, port: %d leave the chat\n",
