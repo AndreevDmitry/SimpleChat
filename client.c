@@ -38,7 +38,6 @@ int client(unsigned long serverIp, unsigned short serverPort)
 
   pthread_join(tid,NULL);
 
-  close(udp.socketDescriptor);
   return EXIT_SUCCESS;
 }
 
@@ -77,17 +76,9 @@ void *recvMsgThread(void *pUdp)
              serverMsg,
              sizeof(serverMsg),
              0);
-
-    if (strcmp(serverMsg, "/exit\n") == 0)
-    {
-      break;
-    }
-    else
-    {
-      puts(serverMsg);
-    }
+    puts(serverMsg);
   }
-  while(1);
+  while (1);
 }
 
 void sendMsgActivity(tUdp *pUdp)
@@ -99,7 +90,7 @@ void sendMsgActivity(tUdp *pUdp)
   {
     if (fgets(clientMsg, sizeof(clientMsg), stdin) == NULL)
     {
-      strcpy(clientMsg, "/exit\n");
+      strcpy(clientMsg, "/closeClient\n");
     }
 
     sendtoStatus = send(pUdp->socketDescriptor,
@@ -112,10 +103,10 @@ void sendMsgActivity(tUdp *pUdp)
       break;
     }
 
-    if(strcmp(clientMsg, "/exit\n") == 0)
+    if(strcmp(clientMsg, "/closeClient\n") == 0)
     {
-      pthread_exit(0);
-      break;
+      close(pUdp->socketDescriptor);
+      exit(EXIT_SUCCESS);
     }
   }
   while(1);

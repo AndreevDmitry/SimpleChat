@@ -23,12 +23,14 @@ tUdp;
 
 static unsigned char serverControl = SERVER_ONLINE;
 static struct sockaddr_in clientDatabase[255];
-static unsigned char lastClientIndex = 0;
+static unsigned char nextClientIndex = 0;
 
 void udpServerInit(tUdp *pUdp, unsigned short port);
 void recvSendMsgActivity(tUdp *pUdp);
 void *waitExitThread(void *pUdp);
 void sendToAll(tUdp *pUdp, char * buffer);
+char clientSearch(tUdp *pUdp);
+void clientHandler(tUdp *pUdp, char currentClient, char *buffer);
 
 int server(unsigned short port)
 {
@@ -76,12 +78,11 @@ void udpServerInit(tUdp *pUdp, unsigned short port)
 void recvSendMsgActivity(tUdp *pUdp)
 {
   char buffer[MSG_SIZE];
-  unsigned char clientExists = 0;
   socklen_t socketLengh = sizeof(struct sockaddr_in);
+  char currentClient;
 
   while(serverControl)
   {
-    clientExists = 0;
     int n = recvfrom(pUdp->socketDescriptor,
                      buffer,
                      sizeof(buffer),
@@ -91,24 +92,21 @@ void recvSendMsgActivity(tUdp *pUdp)
 
     buffer[n] = '\0';
     puts(buffer);
+    currentClient = clientSearch(pUdp);
 
-    /*Add new client to dispribution list*/
-    for(unsigned char clientNumber = 0; clientNumber < lastClientIndex; clientNumber++)
+    if (currentClient == -1)
     {
-       if (pUdp->clientAddress.sin_addr.s_addr == clientDatabase[clientNumber].sin_addr.s_addr &&
-           pUdp->clientAddress.sin_port == clientDatabase[clientNumber].sin_port)
-        {
-          clientExists = 1;
-          break;
-        }
-    }
-    if (clientExists == 0)
-    {
-      clientDatabase[lastClientIndex] = pUdp->clientAddress;
-      lastClientIndex++;
-    }
+      /*Respond with same to sender at first*/
+      sendto(pUdp->socketDescriptor,
+             buffer,
+             MSG_SIZE,
+             0,
+             (struct sockaddr*)&(pUdp->clientAddress),
+             sizeof(struct sockaddr_in));
+     }
 
-    sendToAll(pUdp, buffer);
+     clientHandler(pUdp, currentClient, buffer);
+     sendToAll(pUdp, buffer);
   }
 }
 
@@ -116,23 +114,26 @@ void *waitExitThread(void *pUdp)
 {
   char* fgetsStatus;
   char controlMsg[MSG_SIZE];
-
-  fgetsStatus = fgets(controlMsg, sizeof(controlMsg), stdin);
-  if ((fgetsStatus == NULL) || (strcmp(controlMsg, "/exit\n") == 0))
+  do
   {
-     serverControl = SERVER_0FFLINE;
-     strcpy(controlMsg, "Server goes to offline...\n");
-     puts(controlMsg);
-     sendToAll(((tUdp*)pUdp), controlMsg);
-     close(((tUdp*)pUdp)->socketDescriptor);
-     exit(EXIT_SUCCESS);
+    fgetsStatus = fgets(controlMsg, sizeof(controlMsg), stdin);
+    if ((fgetsStatus == NULL) || (strcmp(controlMsg, "/closeServer\n") == 0))
+    {
+       serverControl = SERVER_0FFLINE;
+       strcpy(controlMsg, "Server goes to offline...\n");
+       puts(controlMsg);
+       sendToAll(((tUdp*)pUdp), controlMsg);
+       close(((tUdp*)pUdp)->socketDescriptor);
+       exit(EXIT_SUCCESS);
+    }
   }
+  while(1);
 }
 
-void sendToAll(tUdp *pUdp, char * buffer)
+void sendToAll(tUdp *pUdp, char *buffer)
 {
   // send received message to all known clients
-  for (unsigned char clientNumber = 0; clientNumber < lastClientIndex; clientNumber++)
+  for (unsigned char clientNumber = 0; clientNumber < nextClientIndex; clientNumber++)
   {
     sendto(pUdp->socketDescriptor,
            buffer,
@@ -140,5 +141,52 @@ void sendToAll(tUdp *pUdp, char * buffer)
            0,
            (struct sockaddr*)&(clientDatabase[clientNumber]),
            sizeof(struct sockaddr_in));
+  }
+}
+
+char clientSearch(tUdp *pUdp)
+{
+  char clientPosition = -1;
+
+  for(unsigned char clientNumber = 0; clientNumber < nextClientIndex; clientNumber++)
+  {
+     if (pUdp->clientAddress.sin_addr.s_addr == clientDatabase[clientNumber].sin_addr.s_addr &&
+         pUdp->clientAddress.sin_port == clientDatabase[clientNumber].sin_port)
+      {
+        clientPosition = clientNumber;
+      }
+  }
+  return clientPosition;
+}
+
+void clientHandler(tUdp *pUdp, char currentClient, char *buffer)
+{
+  if ((currentClient == -1) && !(strcmp(buffer, "/closeClient\n") == 0))
+  {
+    sprintf(buffer,
+           "Client with IP: %d, port: %d connected to the chat\n",
+           pUdp->clientAddress.sin_addr.s_addr,
+           pUdp->clientAddress.sin_port);
+    puts(buffer);
+    clientDatabase[nextClientIndex] = pUdp->clientAddress;
+    nextClientIndex++;
+  }
+  else if ((currentClient > -1) && (strcmp(buffer, "/closeClient\n") == 0))
+  {
+    sprintf(buffer,
+           "Client with IP: %d, port: %d leave the chat\n",
+           clientDatabase[(unsigned char)currentClient].sin_addr.s_addr,
+           clientDatabase[(unsigned char)currentClient].sin_port);
+    puts(buffer);
+    if (nextClientIndex > 0)
+    {
+      clientDatabase[(unsigned char)currentClient] = clientDatabase[(unsigned char)(nextClientIndex-1)];
+      memset (&(clientDatabase[nextClientIndex-1]), 0, sizeof(struct sockaddr_in));
+      nextClientIndex--;
+    }
+    else
+    {
+      memset (&(clientDatabase[nextClientIndex]), 0, sizeof(struct sockaddr_in));
+    }
   }
 }
