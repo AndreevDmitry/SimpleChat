@@ -2,7 +2,7 @@ testServer: build
 	pytest
 
 runServer: build
-	./chat 2115 & echo $$! > /tmp/chatServer.pid & echo $$! > /tmp/chatServer.pid
+	./chat 2115
 
 stopServer:
 	kill `cat /tmp/chatServer.pid` && rm "/tmp/chatServer.pid"
