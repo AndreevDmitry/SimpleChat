@@ -16,6 +16,8 @@ typedef struct
 }
 tUdp;
 
+char closeClient = 0;
+
 void udpClientInit(tUdp *pUdp, unsigned long serverIp, unsigned short serverPort);
 void sendMsgActivity(tUdp *pUdp);
 void *recvMsgThread(void *pUdp);
@@ -35,8 +37,6 @@ int client(unsigned long serverIp, unsigned short serverPort)
   pthread_create(&tid,&attr,(void *)recvMsgThread, &udp);
 
   sendMsgActivity(&udp);
-
-  pthread_join(tid,NULL);
 
   return EXIT_SUCCESS;
 }
@@ -78,7 +78,8 @@ void *recvMsgThread(void *pUdp)
              0);
     puts(serverMsg);
   }
-  while (1);
+  while (closeClient == 0);
+  pthread_exit(NULL);
 }
 
 void sendMsgActivity(tUdp *pUdp)
@@ -106,8 +107,8 @@ void sendMsgActivity(tUdp *pUdp)
     if(strcmp(clientMsg, "/closeClient\n") == 0)
     {
       close(pUdp->socketDescriptor);
-      exit(EXIT_SUCCESS);
+      closeClient=1;
     }
   }
-  while(1);
+  while(closeClient == 0);
 }
