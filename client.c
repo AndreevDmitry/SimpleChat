@@ -18,7 +18,7 @@ tUdp;
 
 void udpClientInit(tUdp *pUdp, unsigned long serverIp, unsigned short serverPort);
 void sendMsgActivity(tUdp *pUdp);
-void recvMsgThread(void *pUdp);
+void *recvMsgThread(void *pUdp);
 
 int client(unsigned long serverIp, unsigned short serverPort)
 {
@@ -39,7 +39,7 @@ int client(unsigned long serverIp, unsigned short serverPort)
   pthread_join(tid,NULL);
 
   close(udp.socketDescriptor);
-  return 0;
+  return EXIT_SUCCESS;
 }
 
 void udpClientInit(tUdp *pUdp, unsigned long serverIp, unsigned short serverPort)
@@ -53,11 +53,9 @@ void udpClientInit(tUdp *pUdp, unsigned long serverIp, unsigned short serverPort
       exit(EXIT_FAILURE);
   }
 
-
   pUdp->serverAddress.sin_family = AF_INET;
   pUdp->serverAddress.sin_port = htons(serverPort);
   pUdp->serverAddress.sin_addr.s_addr = serverIp;
-
 
   connectionStatus = connect(pUdp->socketDescriptor,
                              (struct sockaddr *)&(pUdp->serverAddress),
@@ -69,7 +67,7 @@ void udpClientInit(tUdp *pUdp, unsigned long serverIp, unsigned short serverPort
    }
 }
 
-void recvMsgThread(void *pUdp)
+void *recvMsgThread(void *pUdp)
 {
   char serverMsg[MSG_SIZE];
 
