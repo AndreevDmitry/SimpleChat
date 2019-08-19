@@ -16,9 +16,9 @@ typedef struct
 }
 tUdp;
 
-void udpInit(tUdp *pUdp, unsigned long serverIp, unsigned short serverPort);
+void udpClientInit(tUdp *pUdp, unsigned long serverIp, unsigned short serverPort);
 void sendMsgActivity(tUdp *pUdp);
-void recvMsgThread(void *pUdp); /* Thread function */
+void recvMsgThread(void *pUdp);
 
 int client(unsigned long serverIp, unsigned short serverPort)
 {
@@ -26,7 +26,7 @@ int client(unsigned long serverIp, unsigned short serverPort)
   pthread_t tid;
   pthread_attr_t attr;
 
-  udpInit(&udp, serverIp, serverPort);
+  udpClientInit(&udp, serverIp, serverPort);
 
   /*Receiver and sender should be runned in separated threads, because reading
     from stdin can block thread indefinitely and messages will not be received
@@ -42,10 +42,10 @@ int client(unsigned long serverIp, unsigned short serverPort)
   return 0;
 }
 
-void udpInit(tUdp *pUdp, unsigned long serverIp, unsigned short serverPort)
+void udpClientInit(tUdp *pUdp, unsigned long serverIp, unsigned short serverPort)
 {
   int connectionStatus;
-  // Creating socket descriptor
+
   pUdp->socketDescriptor = socket(AF_INET, SOCK_DGRAM, 0);
   if ( pUdp->socketDescriptor < 0 )
   {
@@ -53,15 +53,15 @@ void udpInit(tUdp *pUdp, unsigned long serverIp, unsigned short serverPort)
       exit(EXIT_FAILURE);
   }
 
-  // Filling server information
+
   pUdp->serverAddress.sin_family = AF_INET;
   pUdp->serverAddress.sin_port = htons(serverPort);
   pUdp->serverAddress.sin_addr.s_addr = serverIp;
 
-  // connect to server
+
   connectionStatus = connect(pUdp->socketDescriptor,
                              (struct sockaddr *)&(pUdp->serverAddress),
-                             sizeof((pUdp->serverAddress)));
+                             sizeof(struct sockaddr_in));
   if(connectionStatus < 0)
   {
      perror("\n Error : Connect Failed \n");
@@ -82,7 +82,6 @@ void recvMsgThread(void *pUdp)
 
     if (strcmp(serverMsg, "/exit\n") == 0)
     {
-      pthread_exit(0);
       break;
     }
     else
@@ -102,8 +101,7 @@ void sendMsgActivity(tUdp *pUdp)
   {
     if (fgets(clientMsg, sizeof(clientMsg), stdin) == NULL)
     {
-      perror("fgets failed");
-      break;
+      strcpy(clientMsg, "/exit\n");
     }
 
     sendtoStatus = send(pUdp->socketDescriptor,
@@ -118,7 +116,8 @@ void sendMsgActivity(tUdp *pUdp)
 
     if(strcmp(clientMsg, "/exit\n") == 0)
     {
-       break;
+      pthread_exit(0);
+      break;
     }
   }
   while(1);
