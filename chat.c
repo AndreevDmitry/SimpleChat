@@ -10,7 +10,7 @@ void help(void);
 
 int main(int argc, char *argv[])
 {
-  unsigned long serverAddress;
+  unsigned int serverAddress;
   int serverPort;
 
   if (argc == 1)
@@ -27,11 +27,18 @@ int main(int argc, char *argv[])
   }
   else if (argc == 3)
   {
-    serverAddress = inet_addr(argv[1]);
-    serverPort = atoi(argv[2]);
-    printf("Start client, connect with server at port %d\n", serverPort);
-    printf("Use /QUIT or Ctrl+D for leave chat\n");
-    client(serverAddress, serverPort);
+    if(inet_pton(AF_INET, argv[1], &serverAddress) > 0)
+    {
+      serverPort = atoi(argv[2]);
+      printf("Start client, connect with server at port %d\n", serverPort);
+      printf("Use /QUIT or Ctrl+D for leave chat\n");
+      client(serverAddress, serverPort);
+    }
+    else
+    {
+      perror("IP address is not correct");
+      help();
+    }
   }
   else
   {
@@ -44,6 +51,6 @@ int main(int argc, char *argv[])
 
 void help(void)
 {
-  printf("Pass port only if you want to run a server\n");
-  printf("Pass IP and port of server for run client\n");
+  printf("Pass port (e.g. 2115) only if you want to run a server\n");
+  printf("Pass IP (e.g. 127.0.0.1) and port (e.g 2115) of server for run client\n");
 }
