@@ -29,8 +29,8 @@ int main(int argc, char *argv[])
   {
     serverAddress = inet_addr(argv[1]);
     serverPort = atoi(argv[2]);
-    printf("Start client on port %d\n", serverPort);
-    printf("Use /closeClient or Ctrl+D for leave chat\n");
+    printf("Start client, connect with server at port %d\n", serverPort);
+    printf("Use /QUIT or Ctrl+D for leave chat\n");
     client(serverAddress, serverPort);
   }
   else

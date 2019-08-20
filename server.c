@@ -8,7 +8,10 @@
 #include <netinet/in.h>
 #include <string.h>
 
-#define MSG_SIZE 1000
+#define HANDLE_BUF_SIZE 100
+#define MSG_SIZE 1000 + HANDLE_BUF_SIZE
+
+#define MAX_CLIENTS 255
 #define UNKNOWN_CLIENT (char)(-1)
 
 typedef struct
@@ -19,14 +22,13 @@ typedef struct
 }
 tUdp;
 
-static struct sockaddr_in clientDatabase[255];
+static struct sockaddr_in clientDatabase[MAX_CLIENTS];
 static unsigned char nextClientIndex = 0;
 
-void udpServerInit(tUdp *pUdp, unsigned short port);
-void recvSendMsgActivity(tUdp *pUdp);
-void sendToAll(tUdp *pUdp, char * buffer);
-char clientSearch(tUdp *pUdp);
-void clientHandler(tUdp *pUdp, char currentClient, char *buffer);
+static void udpServerInit(tUdp *pUdp, unsigned short port);
+static void recvSendMsgActivity(tUdp *pUdp);
+static void clientHandler(struct sockaddr_in currentClient, char *buffer);
+static void sendToAll(int socket, char *buffer);
 
 int server(unsigned short port)
 {
@@ -66,7 +68,6 @@ void recvSendMsgActivity(tUdp *pUdp)
 {
   char buffer[MSG_SIZE];
   socklen_t socketLengh = sizeof(struct sockaddr_in);
-  char currentClient;
 
   while(1)
   {
@@ -78,86 +79,77 @@ void recvSendMsgActivity(tUdp *pUdp)
                      &socketLengh);
 
     buffer[n] = '\0';
-    puts(buffer);
 
-    currentClient = clientSearch(pUdp);
-    clientHandler(pUdp, currentClient, buffer);
-    sendToAll(pUdp, buffer);
+    clientHandler(pUdp->clientAddress, buffer);
+    sendToAll(pUdp->socketDescriptor, buffer);
   }
 }
 
-void sendToAll(tUdp *pUdp, char *buffer)
-{
-  // send received message to all known clients
-  for (unsigned char clientNumber = 0; clientNumber < nextClientIndex; clientNumber++)
-  {
-    sendto(pUdp->socketDescriptor,
-           buffer,
-           MSG_SIZE,
-           0,
-           (struct sockaddr*)&(clientDatabase[clientNumber]),
-           sizeof(struct sockaddr_in));
-  }
-}
-
-char clientSearch(tUdp *pUdp)
+void clientHandler(struct sockaddr_in currentClient, char *buffer)
 {
   char clientPosition = UNKNOWN_CLIENT;
+  static char handlerBuffer[HANDLE_BUF_SIZE] = {0};
 
-  for(unsigned char clientNumber = 0; clientNumber < nextClientIndex; clientNumber++)
+  /*Search current client in data base*/
+  for(unsigned char i = 0; i <= nextClientIndex; i++)
   {
-     if (pUdp->clientAddress.sin_addr.s_addr == clientDatabase[clientNumber].sin_addr.s_addr &&
-         pUdp->clientAddress.sin_port == clientDatabase[clientNumber].sin_port)
+     if (currentClient.sin_addr.s_addr == clientDatabase[i].sin_addr.s_addr &&
+         currentClient.sin_port == clientDatabase[i].sin_port)
       {
-        clientPosition = clientNumber;
+        clientPosition = i;
+        break;
       }
   }
-  return clientPosition;
-}
-
-void clientHandler(tUdp *pUdp, char currentClient, char *buffer)
-{
-  /*Respond with same message for current client and all known clients*/
-  if (currentClient == UNKNOWN_CLIENT)
-  {
-
-     sendto(pUdp->socketDescriptor,
-           buffer,
-           MSG_SIZE,
-           0,
-           (struct sockaddr*)&(pUdp->clientAddress),
-           sizeof(struct sockaddr_in));
-     sendToAll(pUdp, buffer);
-   }
 
   /*Add new client to the end of clientDatabase*/
-  if ((currentClient == UNKNOWN_CLIENT) && !(strcmp(buffer, "/closeClient\n") == 0))
+  if ((clientPosition == UNKNOWN_CLIENT) && !(strcmp(buffer, "/QUIT\n") == 0))
   {
-    sprintf(buffer,
-           "Client with IP: %d, port: %d connected to the chat\n",
-           pUdp->clientAddress.sin_addr.s_addr,
-           pUdp->clientAddress.sin_port);
-    puts(buffer);
-    clientDatabase[nextClientIndex] = pUdp->clientAddress;
-    nextClientIndex++;
-  }
-  /*Remove client from clientDatabase when it leave chat*/
-  else if ((currentClient > UNKNOWN_CLIENT) && (strcmp(buffer, "/closeClient\n") == 0))
-  {
-    sprintf(buffer,
-           "Client with IP: %d, port: %d leave the chat\n",
-           clientDatabase[(unsigned char)currentClient].sin_addr.s_addr,
-           clientDatabase[(unsigned char)currentClient].sin_port);
-    puts(buffer);
-    if (nextClientIndex > 0)
+    if (nextClientIndex == MAX_CLIENTS-1)
     {
-      clientDatabase[(unsigned char)currentClient] = clientDatabase[(unsigned char)(nextClientIndex-1)];
-      memset (&(clientDatabase[nextClientIndex-1]), 0, sizeof(struct sockaddr_in));
-      nextClientIndex--;
+      sprintf(handlerBuffer,
+             "Chat is full\nClient with IP: %d, port: %d WILL NOT be add the chat\n",
+             currentClient.sin_addr.s_addr,
+             currentClient.sin_port);
     }
     else
     {
-      memset (&(clientDatabase[nextClientIndex]), 0, sizeof(struct sockaddr_in));
+      sprintf(handlerBuffer,
+             "Client with IP: %d, port: %d connected to the chat\n",
+             currentClient.sin_addr.s_addr,
+             currentClient.sin_port);
+      clientDatabase[nextClientIndex] = currentClient;
+      nextClientIndex++;
+      strcat(buffer, handlerBuffer);
     }
   }
+  /*Remove client from clientDatabase when it leave chat*/
+  else if ((clientPosition > UNKNOWN_CLIENT) && (strcmp(buffer, "/QUIT\n") == 0))
+  {
+    sprintf(handlerBuffer,
+           "Client with IP: %d, port: %d leave the chat\n",
+           clientDatabase[(unsigned char)clientPosition].sin_addr.s_addr,
+           clientDatabase[(unsigned char)clientPosition].sin_port);
+    if (nextClientIndex > 0)
+    {
+      clientDatabase[(unsigned char)clientPosition] = clientDatabase[(unsigned char)(nextClientIndex-1)];
+      nextClientIndex--;
+    }
+    strcat(buffer, handlerBuffer);
+  }
+}
+
+void sendToAll(int socket, char *buffer)
+{
+  // send received message to all known clients
+  for (unsigned char i = 0; i < nextClientIndex; i++)
+  {
+    sendto(socket,
+           buffer,
+           MSG_SIZE,
+           0,
+           (struct sockaddr*)&(clientDatabase[i]),
+           sizeof(struct sockaddr_in));
+  }
+  // And to server screen
+  puts(buffer);
 }

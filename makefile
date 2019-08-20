@@ -4,6 +4,9 @@ testServer: build
 runServer: build
 	./chat 2115 & echo $$! > /tmp/chatServer.pid
 
+runClient: build
+	./chat 127.0.0.1 2115 
+
 stopServer:
 	kill `cat /tmp/chatServer.pid` && rm "/tmp/chatServer.pid"
 

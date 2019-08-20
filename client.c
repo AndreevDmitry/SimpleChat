@@ -7,109 +7,96 @@
 #include <arpa/inet.h>
 #include <pthread.h>
 
-#define MSG_SIZE 1000
-#define ACTIVE_CLIENT 1
-#define CLOSE_CLIENT  0
-typedef struct
-{
-  int socketDescriptor;
-  struct sockaddr_in serverAddress;
-}
-tUdp;
+#define MSG_SIZE 1100
 
-char clientStatus = ACTIVE_CLIENT;
-
-void udpClientInit(tUdp *pUdp, unsigned long serverIp, unsigned short serverPort);
-void sendMsgActivity(tUdp *pUdp);
-void *recvMsgThread(void *pUdp);
+static int udpClientInit(unsigned long serverIp, unsigned short serverPort);
+static void sendMsgActivity(int socketDescriptor, pthread_t *tid);
+static void *recvMsgThread(void *socketDescriptor);
 
 int client(unsigned long serverIp, unsigned short serverPort)
 {
-  tUdp udp = {};
+  int socketDescriptor;
   pthread_t tid;
   pthread_attr_t attr;
 
-  udpClientInit(&udp, serverIp, serverPort);
+  socketDescriptor = udpClientInit(serverIp, serverPort);
 
   /*Receiver and sender should be runned in separated threads, because reading
     from stdin can block thread indefinitely and messages will not be received
     in time*/
   pthread_attr_init(&attr);
-  pthread_create(&tid,&attr,(void *)recvMsgThread, &udp);
+  pthread_create(&tid,&attr,(void *)recvMsgThread, &socketDescriptor);
 
-  sendMsgActivity(&udp);
-
+  sendMsgActivity(socketDescriptor, &tid);
+  close(socketDescriptor);
   return EXIT_SUCCESS;
 }
 
-void udpClientInit(tUdp *pUdp, unsigned long serverIp, unsigned short serverPort)
+int udpClientInit(unsigned long serverIp, unsigned short serverPort)
 {
   int connectionStatus;
+  int socketDescriptor;
+  struct sockaddr_in serverAddress;
 
-  pUdp->socketDescriptor = socket(AF_INET, SOCK_DGRAM, 0);
-  if ( pUdp->socketDescriptor < 0 )
+  socketDescriptor = socket(AF_INET, SOCK_DGRAM, 0);
+  if ( socketDescriptor < 0 )
   {
       perror("UDP socket creation failed");
       exit(EXIT_FAILURE);
   }
 
-  pUdp->serverAddress.sin_family = AF_INET;
-  pUdp->serverAddress.sin_port = htons(serverPort);
-  pUdp->serverAddress.sin_addr.s_addr = serverIp;
+  serverAddress.sin_family = AF_INET;
+  serverAddress.sin_port = htons(serverPort);
+  serverAddress.sin_addr.s_addr = serverIp;
 
-  connectionStatus = connect(pUdp->socketDescriptor,
-                             (struct sockaddr *)&(pUdp->serverAddress),
+  connectionStatus = connect(socketDescriptor,
+                             (struct sockaddr *)&serverAddress,
                              sizeof(struct sockaddr_in));
   if(connectionStatus < 0)
   {
-     perror("\n Error : Connect Failed \n");
-     exit(EXIT_FAILURE);
-   }
+    perror("\n Error : Connect Failed \n");
+    exit(EXIT_FAILURE);
+  }
+  return socketDescriptor;
 }
 
-void *recvMsgThread(void *pUdp)
+void *recvMsgThread(void *socketDescriptor)
 {
   char serverMsg[MSG_SIZE];
-
+  int recvStatus;
   do
   {
-    recv(((tUdp*)pUdp)->socketDescriptor,
-             serverMsg,
-             sizeof(serverMsg),
-             0);
+    recvStatus = recv(*((int *)socketDescriptor), serverMsg, sizeof(serverMsg), 0);
     puts(serverMsg);
   }
-  while (clientStatus == ACTIVE_CLIENT);
+  while (recvStatus > 0);
   pthread_exit(NULL);
 }
 
-void sendMsgActivity(tUdp *pUdp)
+void sendMsgActivity(int socketDescriptor, pthread_t *tid)
 {
-  char clientMsg[MSG_SIZE];
+  char message[MSG_SIZE];
   size_t sendtoStatus;
 
   do
   {
-    if (fgets(clientMsg, sizeof(clientMsg), stdin) == NULL)
+    if (fgets(message, sizeof(message), stdin) == NULL)
     {
-      strcpy(clientMsg, "/closeClient\n");
+      strcpy(message, "/QUIT\n");
     }
 
-    sendtoStatus = send(pUdp->socketDescriptor,
-                          &clientMsg,
-                          strlen(clientMsg),
-                          0);
+    sendtoStatus = send(socketDescriptor, &message, strlen(message), 0);
     if (sendtoStatus == -1)
     {
       perror("sendto failed");
       break;
     }
 
-    if(strcmp(clientMsg, "/closeClient\n") == 0)
+    if(strcmp(message, "/QUIT\n") == 0)
     {
-      close(pUdp->socketDescriptor);
-      clientStatus = CLOSE_CLIENT;
+      pthread_cancel(*tid);
+      break;
     }
   }
-  while(clientStatus == ACTIVE_CLIENT);
+  while(1);
 }
