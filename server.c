@@ -39,7 +39,7 @@ int server(unsigned short port)
   return EXIT_SUCCESS;
 }
 
-void udpServerInit(tUdp *pUdp, unsigned short port)
+static void udpServerInit(tUdp *pUdp, unsigned short port)
 {
   int bindStatus;
 
@@ -64,7 +64,7 @@ void udpServerInit(tUdp *pUdp, unsigned short port)
   }
 }
 
-void recvSendMsgActivity(tUdp *pUdp)
+static void recvSendMsgActivity(tUdp *pUdp)
 {
   char buffer[MSG_SIZE];
   socklen_t socketLengh = sizeof(struct sockaddr_in);
@@ -85,7 +85,7 @@ void recvSendMsgActivity(tUdp *pUdp)
   }
 }
 
-void clientHandler(struct sockaddr_in currentClient, char *buffer)
+static void clientHandler(struct sockaddr_in currentClient, char *buffer)
 {
   char clientPosition = UNKNOWN_CLIENT;
   static char handlerBuffer[HANDLE_BUF_SIZE] = {0};
@@ -138,7 +138,7 @@ void clientHandler(struct sockaddr_in currentClient, char *buffer)
   }
 }
 
-void sendToAll(int socket, char *buffer)
+static void sendToAll(int socket, char *buffer)
 {
   // send received message to all known clients
   for (unsigned char i = 0; i < nextClientIndex; i++)

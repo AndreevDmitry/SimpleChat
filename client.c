@@ -32,7 +32,7 @@ int client(unsigned long serverIp, unsigned short serverPort)
   return EXIT_SUCCESS;
 }
 
-int udpClientInit(unsigned long serverIp, unsigned short serverPort)
+static int udpClientInit(unsigned long serverIp, unsigned short serverPort)
 {
   int connectionStatus;
   int socketDescriptor;
@@ -60,7 +60,7 @@ int udpClientInit(unsigned long serverIp, unsigned short serverPort)
   return socketDescriptor;
 }
 
-void *recvMsgThread(void *socketDescriptor)
+static void *recvMsgThread(void *socketDescriptor)
 {
   char serverMsg[MSG_SIZE];
   int recvStatus;
@@ -73,7 +73,7 @@ void *recvMsgThread(void *socketDescriptor)
   pthread_exit(NULL);
 }
 
-void sendMsgActivity(int socketDescriptor, pthread_t *tid)
+static void sendMsgActivity(int socketDescriptor, pthread_t *tid)
 {
   char message[MSG_SIZE];
   size_t sendtoStatus;
