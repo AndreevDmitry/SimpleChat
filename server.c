@@ -11,6 +11,7 @@
 #define HANDLE_BUF_SIZE 100
 #define MSG_SIZE 1000 + HANDLE_BUF_SIZE
 
+#define USERNAME_LENGTH 24
 #define MAX_CLIENTS 255
 #define UNKNOWN_CLIENT (char)(-1)
 
@@ -19,15 +20,20 @@ typedef struct
   int socketDescriptor;
   struct sockaddr_in serverAddress;
   struct sockaddr_in clientAddress;
-}
-tUdp;
+} tUdp;
 
-static struct sockaddr_in clientDatabase[MAX_CLIENTS];
+typedef struct
+{
+  char name[USERNAME_LENGTH];
+  struct sockaddr_in address;
+} tClientData;
+
+static tClientData clientData[MAX_CLIENTS] = {};
 static unsigned char nextClientIndex = 0;
 
 static void udpServerInit(tUdp *pUdp, unsigned short port);
 static void recvSendMsgActivity(tUdp *pUdp);
-static void clientHandler(struct sockaddr_in currentClient, char *buffer);
+static void clientHandler(struct sockaddr_in *pCurrentClient, char *buffer);
 static void sendToAll(int socket, char *buffer);
 
 int server(unsigned short port)
@@ -80,12 +86,12 @@ static void recvSendMsgActivity(tUdp *pUdp)
 
     buffer[n] = '\0';
 
-    clientHandler(pUdp->clientAddress, buffer);
+    clientHandler(&(pUdp->clientAddress), buffer);
     sendToAll(pUdp->socketDescriptor, buffer);
   }
 }
 
-static void clientHandler(struct sockaddr_in currentClient, char *buffer)
+static void clientHandler(struct sockaddr_in *pCurrentClient, char *buffer)
 {
   char clientPosition = UNKNOWN_CLIENT;
   static char handlerBuffer[HANDLE_BUF_SIZE] = {0};
@@ -93,48 +99,52 @@ static void clientHandler(struct sockaddr_in currentClient, char *buffer)
   /*Search current client in data base*/
   for(unsigned char i = 0; i <= nextClientIndex; i++)
   {
-     if (currentClient.sin_addr.s_addr == clientDatabase[i].sin_addr.s_addr &&
-         currentClient.sin_port == clientDatabase[i].sin_port)
+     if (pCurrentClient->sin_addr.s_addr == clientData[i].address.sin_addr.s_addr &&
+         pCurrentClient->sin_port == clientData[i].address.sin_port)
       {
         clientPosition = i;
         break;
       }
   }
 
-  /*Add new client to the end of clientDatabase*/
   if ((clientPosition == UNKNOWN_CLIENT) && !(strcmp(buffer, "/QUIT\n") == 0))
   {
     if (nextClientIndex == MAX_CLIENTS-1)
     {
       sprintf(handlerBuffer,
              "Chat is full\nClient with IP: %d, port: %d WILL NOT be add the chat\n",
-             currentClient.sin_addr.s_addr,
-             currentClient.sin_port);
+             pCurrentClient->sin_addr.s_addr,
+             pCurrentClient->sin_port);
     }
     else
-    {
-      sprintf(handlerBuffer,
-             "Client with IP: %d, port: %d connected to the chat\n",
-             currentClient.sin_addr.s_addr,
-             currentClient.sin_port);
-      clientDatabase[nextClientIndex] = currentClient;
-      nextClientIndex++;
+    { /*Add new client to the end of clientDatabase*/
+      memcpy(&(clientData[nextClientIndex].name), buffer, (strlen(buffer)));
+      sprintf(handlerBuffer, "connected to the chat\n");
       strcat(buffer, handlerBuffer);
+      clientData[nextClientIndex].address = *pCurrentClient;
+      nextClientIndex++;
     }
   }
-  /*Remove client from clientDatabase when it leave chat*/
-  else if ((clientPosition > UNKNOWN_CLIENT) && (strcmp(buffer, "/QUIT\n") == 0))
+  else if (clientPosition > UNKNOWN_CLIENT)
   {
-    sprintf(handlerBuffer,
-           "Client with IP: %d, port: %d leave the chat\n",
-           clientDatabase[(unsigned char)clientPosition].sin_addr.s_addr,
-           clientDatabase[(unsigned char)clientPosition].sin_port);
-    if (nextClientIndex > 0)
-    {
-      clientDatabase[(unsigned char)clientPosition] = clientDatabase[(unsigned char)(nextClientIndex-1)];
-      nextClientIndex--;
+    if (strcmp(buffer, "/QUIT\n") == 0)
+    { /*Remove client from clientDatabase when it leave chat*/
+      memset(buffer, 0, MSG_SIZE);
+      strcpy(buffer, clientData[(unsigned char)clientPosition].name);
+      strcat(buffer, "leave the chat\n");
+      if (nextClientIndex > 0)
+      {
+        clientData[(unsigned char)clientPosition].address = clientData[(unsigned char)(nextClientIndex-1)].address;
+        memcpy(&(clientData[(unsigned char)clientPosition].name),
+               &(clientData[nextClientIndex-1].name),
+               USERNAME_LENGTH);
+        nextClientIndex--;
+      }
     }
-    strcat(buffer, handlerBuffer);
+    else /*Add current user name to input message*/
+    {
+      strcat(buffer, clientData[(unsigned char)clientPosition].name);
+    }
   }
 }
 
@@ -147,7 +157,7 @@ static void sendToAll(int socket, char *buffer)
            buffer,
            MSG_SIZE,
            0,
-           (struct sockaddr*)&(clientDatabase[i]),
+           (struct sockaddr*)&(clientData[i].address),
            sizeof(struct sockaddr_in));
   }
   // And to server screen

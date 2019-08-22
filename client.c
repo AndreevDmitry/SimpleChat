@@ -76,17 +76,20 @@ static void *recvMsgThread(void *socketDescriptor)
 static void sendMsgActivity(int socketDescriptor, pthread_t *tid)
 {
   char message[MSG_SIZE];
-  size_t sendtoStatus;
+  size_t sendStatus;
+
+  printf("\nWelcome to the SimpleChat\nWhat is your name?\n\nMy name (max 24 symbols) is: ");
 
   do
   {
+    /*Ctrl+D handling*/
     if (fgets(message, sizeof(message), stdin) == NULL)
     {
       strcpy(message, "/QUIT\n");
     }
 
-    sendtoStatus = send(socketDescriptor, &message, strlen(message), 0);
-    if (sendtoStatus == -1)
+    sendStatus = send(socketDescriptor, &message, strlen(message), 0);
+    if (sendStatus == -1)
     {
       perror("sendto failed");
       break;
