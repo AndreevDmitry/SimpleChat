@@ -4,59 +4,70 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <netdb.h>
 #include <arpa/inet.h>
 #include <pthread.h>
 
 #define MSG_SIZE 1100
 
-static int udpClientInit(unsigned long serverIp, unsigned short serverPort);
-static void sendMsgActivity(int socketDescriptor, pthread_t *tid);
+static int udpClientInit(char *pNode, char *pService);
+static void sendMsgActivity(int socketDescriptor, pthread_t *threadId);
 static void *recvMsgThread(void *socketDescriptor);
 
-int client(unsigned long serverIp, unsigned short serverPort)
+int client(char *pNode, char *pService)
 {
   int socketDescriptor;
-  pthread_t tid;
-  pthread_attr_t attr;
+  pthread_t threadId;
+  pthread_attr_t threadAttr;
 
-  socketDescriptor = udpClientInit(serverIp, serverPort);
+  socketDescriptor = udpClientInit(pNode, pService);
 
   /*Receiver and sender should be runned in separated threads, because reading
     from stdin can block thread indefinitely and messages will not be received
     in time*/
-  pthread_attr_init(&attr);
-  pthread_create(&tid,&attr,(void *)recvMsgThread, &socketDescriptor);
+  pthread_attr_init(&threadAttr);
+  pthread_create(&threadId, &threadAttr, (void *)recvMsgThread, &socketDescriptor);
 
-  sendMsgActivity(socketDescriptor, &tid);
+  sendMsgActivity(socketDescriptor, &threadId);
   close(socketDescriptor);
   return EXIT_SUCCESS;
 }
 
-static int udpClientInit(unsigned long serverIp, unsigned short serverPort)
+static int udpClientInit(char *pNode, char *pService)
 {
-  int connectionStatus;
+  int status;
   int socketDescriptor;
-  struct sockaddr_in serverAddress;
+  struct addrinfo preSettings = {};
+  struct addrinfo *pServerInfo;
 
-  socketDescriptor = socket(AF_INET, SOCK_DGRAM, 0);
-  if ( socketDescriptor < 0 )
+  preSettings.ai_family = AF_UNSPEC;
+  preSettings.ai_socktype = SOCK_DGRAM;
+  preSettings.ai_flags = AI_PASSIVE;
+
+  status = getaddrinfo(pNode, pService, &preSettings, &pServerInfo);
+  if (status != 0)
   {
-      perror("UDP socket creation failed");
+    fprintf(stderr, "\ngetaddrinfo error: %s\n", gai_strerror(status));
+    exit(EXIT_FAILURE);
+  }
+
+  socketDescriptor = socket(pServerInfo->ai_family,
+                            pServerInfo->ai_socktype,
+                            pServerInfo->ai_protocol);
+  if (socketDescriptor < 0)
+  {
+      perror("\nSocket creation failed\n");
       exit(EXIT_FAILURE);
   }
 
-  serverAddress.sin_family = AF_INET;
-  serverAddress.sin_port = htons(serverPort);
-  serverAddress.sin_addr.s_addr = serverIp;
-
-  connectionStatus = connect(socketDescriptor,
-                             (struct sockaddr *)&serverAddress,
-                             sizeof(struct sockaddr_in));
-  if(connectionStatus < 0)
+  status = connect(socketDescriptor, pServerInfo->ai_addr, pServerInfo->ai_addrlen);
+  if(status < 0)
   {
-    perror("\n Error : Connect Failed \n");
+    perror("\nError : Connect Failed\n");
     exit(EXIT_FAILURE);
   }
+
+  freeaddrinfo(pServerInfo);
   return socketDescriptor;
 }
 
@@ -73,7 +84,7 @@ static void *recvMsgThread(void *socketDescriptor)
   pthread_exit(NULL);
 }
 
-static void sendMsgActivity(int socketDescriptor, pthread_t *tid)
+static void sendMsgActivity(int socketDescriptor, pthread_t *threadId)
 {
   char message[MSG_SIZE];
   size_t sendStatus;
@@ -97,7 +108,7 @@ static void sendMsgActivity(int socketDescriptor, pthread_t *tid)
 
     if(strcmp(message, "/QUIT\n") == 0)
     {
-      pthread_cancel(*tid);
+      pthread_cancel(*threadId);
       break;
     }
   }

@@ -5,6 +5,7 @@
 #include <sys/types.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <netdb.h>
 #include <netinet/in.h>
 #include <string.h>
 
@@ -17,13 +18,6 @@
 
 typedef struct
 {
-  int socketDescriptor;
-  struct sockaddr_in serverAddress;
-  struct sockaddr_in clientAddress;
-} tUdp;
-
-typedef struct
-{
   char name[USERNAME_LENGTH];
   struct sockaddr_in address;
 } tClientData;
@@ -31,63 +25,77 @@ typedef struct
 static tClientData clientData[MAX_CLIENTS] = {};
 static unsigned char nextClientIndex = 0;
 
-static void udpServerInit(tUdp *pUdp, unsigned short port);
-static void recvSendMsgActivity(tUdp *pUdp);
+static int udpServerInit(char *pService);
+static void recvSendMsgActivity(int socketDescriptor);
 static void clientHandler(struct sockaddr_in *pCurrentClient, char *buffer);
 static void sendToAll(int socket, char *buffer);
 
-int server(unsigned short port)
+int server(char *pService)
 {
-  tUdp udp = {};
-
-  udpServerInit(&udp, port);
-  recvSendMsgActivity(&udp);
+  int socketDescriptor = udpServerInit(pService);
+  recvSendMsgActivity(socketDescriptor);
   return EXIT_SUCCESS;
 }
 
-static void udpServerInit(tUdp *pUdp, unsigned short port)
+static int udpServerInit(char *pService)
 {
-  int bindStatus;
+  int status;
+  int socketDescriptor;
+  struct addrinfo preSettings = {};
+  struct addrinfo *pServerInfo;
 
-  pUdp->socketDescriptor = socket(AF_INET, SOCK_DGRAM, 0);
-  if(pUdp->socketDescriptor < 0)
+  preSettings.ai_family = AF_UNSPEC;
+  preSettings.ai_socktype = SOCK_DGRAM;
+  preSettings.ai_flags = AI_PASSIVE;
+
+  status = getaddrinfo(NULL, pService, &preSettings, &pServerInfo);
+  if (status != 0)
   {
-      perror("UDP socket creation failed");
-      exit(EXIT_FAILURE);
-  }
-  pUdp->serverAddress.sin_addr.s_addr = htonl(INADDR_ANY);
-  pUdp->serverAddress.sin_port = htons(port);
-  pUdp->serverAddress.sin_family = AF_INET;
-
-  bindStatus = bind(pUdp->socketDescriptor,
-                    (struct sockaddr*)&(pUdp->serverAddress),
-                    sizeof(struct sockaddr_in));
-
-  if(bindStatus < 0)
-  {
-    perror("\n Error : Bind Failed \n");
+    fprintf(stderr, "\ngetaddrinfo error: %s\n", gai_strerror(status));
     exit(EXIT_FAILURE);
   }
+
+  socketDescriptor = socket(pServerInfo->ai_family,
+                            pServerInfo->ai_socktype,
+                            pServerInfo->ai_protocol);
+  if (socketDescriptor < 0)
+  {
+      perror("\nSocket creation failed\n");
+      exit(EXIT_FAILURE);
+  }
+
+  status = bind(socketDescriptor, pServerInfo->ai_addr, pServerInfo->ai_addrlen);
+  if(status < 0)
+  {
+    perror("\nError : Bind Failed\n");
+    exit(EXIT_FAILURE);
+  }
+  freeaddrinfo(pServerInfo);
+
+  printf("\nStart server\n");
+  printf("Use Ctrl+C for shutdown the server\n");
+
+  return socketDescriptor;
 }
 
-static void recvSendMsgActivity(tUdp *pUdp)
+static void recvSendMsgActivity(int socketDescriptor)
 {
   char buffer[MSG_SIZE];
+  struct sockaddr_in clientAddress = {};
   socklen_t socketLengh = sizeof(struct sockaddr_in);
 
   while(1)
   {
-    int n = recvfrom(pUdp->socketDescriptor,
+    int n = recvfrom(socketDescriptor,
                      buffer,
                      sizeof(buffer),
                      0,
-                     (struct sockaddr*)&(pUdp->clientAddress),
+                     (struct sockaddr*)&(clientAddress),
                      &socketLengh);
-
     buffer[n] = '\0';
 
-    clientHandler(&(pUdp->clientAddress), buffer);
-    sendToAll(pUdp->socketDescriptor, buffer);
+    clientHandler(&clientAddress, buffer);
+    sendToAll(socketDescriptor, buffer);
   }
 }
 
